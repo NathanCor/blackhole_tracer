@@ -21,7 +21,7 @@ int main() {
     Vec3 rawRight = forward.cross({0.0, 0.0, 1.0}).normalized();
     Vec3 rawUp = rawRight.cross(forward).normalized();
 
-    // Inclinaison accentuée et orientée vers la gauche (-0.38 rad ≈ -22 degrés)
+    // Inclinaison accentuée et orientée vers la gauche (-0.38 rad ~ -22 degrés)
     constexpr double tiltAngle = -0.38;
     Vec3 right = rawRight * std::cos(tiltAngle) + rawUp * std::sin(tiltAngle);
     Vec3 up = rawRight * (-std::sin(tiltAngle)) + rawUp * std::cos(tiltAngle);

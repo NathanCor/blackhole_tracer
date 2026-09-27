@@ -99,7 +99,7 @@ void DitherProcessor::applyFloydSteinberg(std::vector<float>& src, int width, in
             if (val > threshold * 0.65f) {
                 bool full = (val > 0.60f);
 
-                // Couleur du point : blanc éclatant au centre, légèrement bleuté/cyan sur les bords
+                // Couleur du point
                 uint8_t ptR = static_cast<uint8_t>(std::clamp(190 + val * 65.0f, 0.0f, 255.0f));
                 uint8_t ptG = static_cast<uint8_t>(std::clamp(215 + val * 40.0f, 0.0f, 255.0f));
                 uint8_t ptB = 255;

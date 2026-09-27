@@ -13,7 +13,7 @@ double AccretionDisk::sample(const Vec3& pOld, const Vec3& pNew, const Vec3& ray
 
     if (r < rIn || r > rOut) return 0.0;
 
-    // Cœur très éclatant (ruban central)
+    // Coeur très éclatant (ruban central)
     double core = std::exp(-std::pow((r - 6.1) / 1.3, 2.0)) * 3.6;
 
     // Anneaux concentriques nets avec creux marqués
