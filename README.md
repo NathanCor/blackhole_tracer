@@ -8,6 +8,20 @@ A stylized C++20 ray tracer simulating light bending around a compact mass and a
 
 ---
 
+---
+
+## The Black Hole Trilogy
+
+This project is the last chapter of a three-part series, going from the physics of a single trajectory to a full animated render:
+
+| # | Project | What it does |
+| :-- | :-- | :-- |
+| 1 | [`schwarzschild_effective_potential`](https://github.com/NathanCor/schwarzschild_effective_potential) | Integrates the fall of a massive particle in the Schwarzschild metric (effective potential, RK4) and plots its orbit. |
+| 2 | [`blackhole_tracer`](https://github.com/NathanCor/blackhole_tracer) | Ray tracer producing a still image of a black hole and its accretion disk from a fixed viewpoint, with a benchmark against the exact null geodesics. |
+| 3 | **`blackhole_tracer_3d`** (this repository) | Animated version: the camera orbits the black hole, and the disk rotates in a seamless loop. |
+
+---
+
 ## Overview
 
 This project traces rays backward from a camera through a strong gravitational field, reproducing the visual signature of a black hole: a photon-sphere-like shadow and a lensed, Doppler-shaded accretion disk. It favors a **fast, visually convincing approximation** over a full general-relativistic integration — see "Physical Model" below for exactly what is and isn't implemented.
