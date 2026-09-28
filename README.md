@@ -68,14 +68,11 @@ The lower exponent was chosen to keep the far (redshifted) side of the disk visi
 │   ├── Font8x8.hpp
 │   ├── Geodesic.hpp
 │   └── Vec3.hpp
-├── src/
-│   ├── AccretionDisk.cpp
-│   ├── Dither.cpp
-│   ├── Geodesic.cpp
-│   └── main.cpp
-└── benchmarks/
-    ├── test_ray.cpp
-    └── validate_benchmark.py
+└── src/
+　   ├── AccretionDisk.cpp
+　   ├── Dither.cpp
+　   ├── Geodesic.cpp
+　   └── main.cpp
 ```
 
 ---
