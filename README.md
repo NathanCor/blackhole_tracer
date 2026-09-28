@@ -1,6 +1,6 @@
-# Schwarzschild Black Hole Ray Tracer
+# Schwarzschild-style Black Hole Ray Tracer
 
-A high-performance C++20 relativistic ray tracer simulating gravitational lensing, null geodesics around a Schwarzschild black hole, and an accretion disk with relativistic Doppler effects, rendered via matrix dithering.
+A stylized C++20 ray tracer simulating light bending around a compact mass and a Keplerian accretion disk with relativistic Doppler shading, rendered via matrix dithering.
 
 <p align="center">
   <img src="blackhole.png" alt="Schwarzschild Black Hole Render" width="100%">
@@ -10,44 +10,50 @@ A high-performance C++20 relativistic ray tracer simulating gravitational lensin
 
 ## Overview
 
-Light rays propagating in the vicinity of a compact mass follow null geodesics defined by the metric of curved spacetime. This project integrates photon trajectories in the **Schwarzschild metric** backward from a distant camera to their source, reproducing the photon sphere, the shadow of the black hole, and the distorted geometry of a thin Keplerian accretion disk.
+This project traces rays backward from a camera through a strong gravitational field, reproducing the visual signature of a black hole: a photon-sphere-like shadow and a lensed, Doppler-shaded accretion disk. It favors a **fast, visually convincing approximation** over a full general-relativistic integration — see "Physical Model" below for exactly what is and isn't implemented.
 
 The output pipeline renders the accumulated radiance into a stylized, dithered matrix look tailored for dark environments (`#0d1117`).
 
 ---
 
-## Physical Foundations
+## Physical Model
 
-### 1. Metric and Equations of Motion
-In geometrized units ($G = c = 1$), the Schwarzschild metric in spherical coordinates $(t, r, \theta, \phi)$ with signature $(-, +, +, +)$ is:
+### 1. Light bending — pseudo-Newtonian approximation
 
-$$ds^2 = -\left(1 - \frac{2M}{r}\right)dt^2 + \left(1 - \frac{2M}{r}\right)^{-1}dr^2 + r^2(d\theta^2 + \sin^2\theta \, d\phi^2)$$
+Rays are **not** integrated as true null geodesics of the Schwarzschild metric. Instead, `GeodesicIntegrator` applies a Newtonian force derived from the **Paczyński–Wiita pseudo-potential**:
 
-Light rays follow null geodesics ($ds^2 = 0$). By taking advantage of spherical symmetry, the trajectory of a photon is integrated using the effective geodesic equations with a 4th-order Runge-Kutta scheme (RK4):
+$$\Phi(r) = -\frac{M}{r - r_s}, \qquad r_s = 2M$$
 
-$$\frac{d^2 x^i}{d\lambda^2} + \Gamma^i_{\mu\nu} \frac{dx^\mu}{d\lambda} \frac{dx^\nu}{d\lambda} = 0$$
+$$\vec{a}(\vec{r}) = -\nabla\Phi = -\frac{M}{(r - r_s)^2}\,\hat{r}$$
 
-- **Event Horizon:** $r_s = 2M$
-- **Photon Sphere:** $r_{ph} = 3M$
-- **ISCO (Innermost Stable Circular Orbit):** $r_{isco} = 6M$
+integrated with a standard 4th-order Runge-Kutta scheme. This potential is a well-known trick for reproducing the correct **ISCO at $r = 6M$** for massive-particle orbits, and it gives a qualitatively black-hole-like deflection and shadow for rendering purposes. It is **not** the real photon geodesic equation, and it does not reproduce the exact GR light-bending angle or the true photon sphere dynamics at $r = 3M$. Treat the render as an artistic approximation, not a physically exact simulation.
 
-### 2. Relativistic Doppler & Redshift
-The plasma orbiting within the disk moves at Keplerian velocity:
+- **Event horizon (cutoff):** $r_s = 2M$
+- **Disk inner edge:** set to the ISCO of the pseudo-potential, $r = 6M$ (configurable)
+
+### 2. Accretion disk — Doppler-shaded, hand-styled brightness
+
+The disk crosses the equatorial plane $z=0$ between a configurable `rIn`/`rOut`. Its base brightness profile is **not derived from a physical emissivity law** (e.g. Shakura–Sunyaev or Novikov–Thorne); it's a hand-tuned sum of Gaussian rings chosen to look good (bright core near the inner edge, a few concentric bands, a fading outer tail). Treat it as a stylistic stand-in for a real emissivity profile.
+
+What *is* physically modeled is the relativistic shading on top of that base brightness. The disk material moves at the Newtonian circular (Keplerian) speed:
 
 $$v_\phi = \sqrt{\frac{M}{r}}$$
 
-The emitted frequency is shifted according to the relativistic factor $g$:
+and each sample is shaded by the special-relativistic Doppler factor toward the camera:
 
-$$g = \frac{\nu_{\text{obs}}}{\nu_{\text{em}}} = \frac{1}{\gamma (1 - \vec{v} \cdot \vec{k})} \sqrt{1 - \frac{2M}{r}}$$
+$$g = \frac{1}{\gamma\,(1 - \vec{v}\cdot\vec{k})}\sqrt{1 - \frac{2M}{r}}, \qquad \gamma = \frac{1}{\sqrt{1-v^2}}$$
 
-where $\gamma = (1 - v^2)^{-1/2}$ is the Lorentz factor, and $\vec{k}$ is the photon direction unit vector in the emitter frame. The observed specific intensity scales with:
+The final intensity uses an **artistic exponent**, not the physical bolometric beaming law ($I_\text{obs} \propto g^4 I_\text{em}$ for an ideal blackbody disk):
 
-$$I_{\text{obs}} \propto g^4 I_{\text{em}}$$
+$$I_{\text{obs}} = I_{\text{base}} \cdot g^{1.35}$$
 
-### 3. Rendering Pipeline
-- **Numerical Integration:** Adaptive RK4 step backward from the observer.
-- **Accretion Disk Crossing:** Continuous boundary sampling on the equatorial plane $z = 0$.
-- **Dithering:** Floyd-Steinberg and ordered thresholding mapped over a `#0d1117` GitHub dark canvas.
+The lower exponent was chosen to keep the far (redshifted) side of the disk visible rather than crushing it to black, at the cost of physical accuracy.
+
+### 3. Rendering pipeline
+- Fixed-step RK4 backward ray marching from the camera, one ray per pixel (OpenMP-parallelized over rows).
+- Rays are stopped at the horizon cutoff ($r \le 1.008\,r_s$) or once they escape past $r = 48M$.
+- Disk contribution is accumulated by sampling every plane crossing along each ray.
+- Output is tone-mapped (gamma + boost), then dithered with Floyd–Steinberg and written out as a `#0d1117`-styled PPM/PNG.
 
 ---
 
@@ -76,8 +82,8 @@ $$I_{\text{obs}} \propto g^4 I_{\text{em}}$$
 ### Prerequisites
 - C++20 compliant compiler (`gcc >= 11` or `clang >= 13`)
 - CMake >= 3.20
-- OpenMP (for CPU multithreading)
-- FFmpeg (for automatic PPM to PNG conversion)
+- OpenMP (optional, enables CPU multithreading if found)
+- FFmpeg (optional — only needed for the `render` target's automatic PPM → PNG conversion)
 
 ### Build with CMake
 
@@ -87,23 +93,33 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 ```
 
-To run the tracer and generate `blackhole.png` directly:
+This produces the `blackhole_tracer` executable, which writes `blackhole.ppm` when run:
+
+```bash
+./blackhole_tracer
+```
+
+If FFmpeg is found on your system, an additional `render` target is generated that runs the tracer and converts the output to PNG in one step:
 
 ```bash
 cmake --build . --target render
 ```
 
-### Build with Make
+Without FFmpeg, convert `blackhole.ppm` to PNG with any tool you like, e.g.:
 
 ```bash
-make run
+ffmpeg -y -i blackhole.ppm blackhole.png
+# or, with Python/Pillow:
+python3 -c "from PIL import Image; Image.open('blackhole.ppm').save('blackhole.png')"
 ```
+
+> Note: there is no Makefile in this project — only CMake is supported.
 
 ---
 
 ## Configuration
 
-Camera perspective, inclination angle, step sizes, and disk radii can be adjusted directly in `src/main.cpp`:
+Camera perspective, inclination angle, step size, and disk radii can be adjusted directly in `src/main.cpp`:
 
 ```cpp
 constexpr int WIDTH = 1920;
