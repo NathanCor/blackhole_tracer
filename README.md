@@ -11,7 +11,7 @@ A stylized C++20 ray tracer simulating light bending around a compact mass and a
 
 ## The Black Hole Trilogy
 
-This project is the last chapter of a three-part series, going from the physics of a single trajectory to a full animated render:
+This project is the second chapter of a three-part series, going from the physics of a single trajectory to a full animated render:
 
 | # | Project | What it does |
 | :-- | :-- | :-- |
