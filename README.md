@@ -26,7 +26,7 @@ $$\Phi(r) = -\frac{M}{r - r_s}, \qquad r_s = 2M$$
 
 $$\vec{a}(\vec{r}) = -\nabla\Phi = -\frac{M}{(r - r_s)^2}\,\hat{r}$$
 
-integrated with a standard 4th-order Runge-Kutta scheme. This potential is a well-known trick for reproducing the correct **ISCO at $r = 6M$** for massive-particle orbits, and it gives a qualitatively black-hole-like deflection and shadow for rendering purposes. It is **not** the real photon geodesic equation, and it does not reproduce the exact GR light-bending angle or the true photon sphere dynamics at $r = 3M$. Treat the render as an artistic approximation, not a physically exact simulation.
+integrated with a standard 4th-order Runge-Kutta scheme. This potential is a well-known trick for reproducing the correct **ISCO at $r = 6M$** for massive-particle orbits, and it gives a qualitatively black-hole-like deflection and shadow for rendering purposes. It is **not** the real photon geodesic equation. Benchmarked against the exact Schwarzschild solution (see *Validation & Benchmarks*), it reproduces the capture threshold and the closest-approach radius of null geodesics to better than $0.3\%$, but it deflects light only about **half** as much as general relativity. Treat the render as an artistic approximation, not a physically exact simulation.
 
 - **Event horizon (cutoff):** $r_s = 2M$
 - **Disk inner edge:** set to the ISCO of the pseudo-potential, $r = 6M$ (configurable)
@@ -68,11 +68,14 @@ The lower exponent was chosen to keep the far (redshifted) side of the disk visi
 │   ├── Font8x8.hpp
 │   ├── Geodesic.hpp
 │   └── Vec3.hpp
-└── src/
-    ├── AccretionDisk.cpp
-    ├── Dither.cpp
-    ├── Geodesic.cpp
-    └── main.cpp
+├── src/
+│   ├── AccretionDisk.cpp
+│   ├── Dither.cpp
+│   ├── Geodesic.cpp
+│   └── main.cpp
+└── benchmarks/
+    ├── test_ray.cpp
+    └── validate_benchmark.py
 ```
 
 ---
@@ -93,7 +96,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 ```
 
-This produces the `blackhole_tracer` executable, which writes `blackhole.ppm` when run:
+This produces the `blackhole_tracer` executable and the `test_ray` benchmark helper. `blackhole_tracer` writes `blackhole.ppm` when run:
 
 ```bash
 ./blackhole_tracer
@@ -143,32 +146,47 @@ $$\left(\frac{dr}{d\lambda}\right)^2 = \frac{1}{b^2} - V_{\text{eff}}(r) \quad \
 * **Critical impact parameter**: The effective potential attains its maximum at the photon sphere $r_{\text{ph}} = 3M$, defining the capture threshold:
   $$b_c = 3\sqrt{3}M \approx 5.196152\,M$$
 * **Plunge regime ($b < b_c$)**: Photons overcome the centrifugal barrier and cross the event horizon ($r \to 2M$).
-* **Scattering regime ($b > b_c$)**: Photons reach an exact turning point $r_{\text{min}}$ (periastron), derived as the physical root of $1/b^2 - V_{\text{eff}}(r) = 0$, before escaping to infinity.
+* **Scattering regime ($b > b_c$)**: Photons reach a turning point $r_{\text{min}}$ (periastron), the largest root of $1/b^2 - V_{\text{eff}}(r) = 0$, before escaping to infinity. The total deflection angle is
+  $$\hat{\alpha}(b) = 2\int_0^{u_0} \frac{du}{\sqrt{1/b^2 - u^2(1 - 2Mu)}} - \pi, \qquad u_0 = 1/r_{\text{min}}$$
+  which behaves as $4M/b$ at large $b$.
 
-### Methodology & GYOTO Cross-Validation
+### Methodology
 
-The benchmark suite (`benchmarks/validate_benchmark.py`) solves the formal elliptic integrals via numerical quadrature (`scipy.integrate.quad` / `scipy.optimize.brentq`). This methodology serves as the gold-standard benchmark established by **Vincent et al. (2011)** for the validation of the relativistic ray-tracing code **GYOTO** (*Observatoire de Paris / LUTH / IAP*).
+`benchmarks/validate_benchmark.py` compares the C++ RK4 solver (`test_ray`) with the exact analytical solution above, computed with `scipy.integrate.quad` and `scipy.optimize.brentq`. No output from a third-party ray-tracing code (such as GYOTO) is used: the reference is the analytical Schwarzschild result.
 
-Numerical integration results from the C++ Runge-Kutta 4th-order solver:
+Each ray is launched from $r = 2000\,M$ with unit velocity and impact parameter $b$. The launch radius matters: starting much closer (for example at $50\,M$) changes the ray's energy at infinity in the pseudo-Newtonian potential and inflates the apparent errors on $r_{\text{min}}$ and $b_c$ by one to two orders of magnitude.
 
-| Impact Parameter $b/M$ | Theoretical Regime | RK4 Numerical State | Theoretical $r_{\text{min}}$ | Numerical $r_{\text{min}}$ | Relative Error |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `4.50` | Plunge | Captured ($r \to 2M$) | $2.0000\,M$ | $2.0000\,M$ | Conforme |
-| `5.00` | Plunge | Captured ($r \to 2M$) | $2.0000\,M$ | $2.0000\,M$ | Conforme |
-| `5.15` | Critical Plunge | Captured ($r \to 2M$) | $2.0000\,M$ | $2.0000\,M$ | Conforme |
-| `5.20` | Critical Scattering | Deflected | $3.0687\,M$ | $3.2556\,M$ | $6.09 \times 10^{-2}$ |
-| `6.00` | Scattering | Deflected | $4.4534\,M$ | $4.5419\,M$ | $1.99 \times 10^{-2}$ |
-| `10.00` | Asymptotic Weak Field | Deflected | $8.7889\,M$ | $8.9597\,M$ | $1.94 \times 10^{-2}$ |
+### Results
 
-*Note on residual discrepancies:* The $\sim 2\%$ relative difference in the deflected regime stems from the Paczyński-Wiita pseudo-Newtonian potential formulation used for the acceleration field compared to full general-relativistic Christoffel symbols, alongside fixed step-size effects during turning-point integration.
+| $b/M$ | Exact regime | Solver regime | Exact $r_{\text{min}}$ | Solver $r_{\text{min}}$ | Relative error | Solver deflection (rad) | Exact deflection (rad) | Solver / exact |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `4.50` | Plunge | Plunge | $2.0000$ | $2.0000$ | — | — | — | — |
+| `5.00` | Plunge | Plunge | $2.0000$ | $2.0000$ | — | — | — | — |
+| `5.15` | Plunge | Plunge | $2.0000$ | $2.0000$ | — | — | — | — |
+| `5.20` | Scattering | Scattering | $3.0687$ | $3.0766$ | $2.6 \times 10^{-3}$ | $3.703$ | $6.810$ | $0.544$ |
+| `5.35` | Scattering | Scattering | $3.5072$ | $3.5094$ | $6.4 \times 10^{-4}$ | $1.733$ | $3.183$ | $0.544$ |
+| `6.00` | Scattering | Scattering | $4.4534$ | $4.4554$ | $4.7 \times 10^{-4}$ | $0.912$ | $1.719$ | $0.531$ |
+| `8.00` | Scattering | Scattering | $6.7005$ | $6.7035$ | $4.5 \times 10^{-4}$ | $0.445$ | $0.859$ | $0.518$ |
+| `10.00` | Scattering | Scattering | $8.7889$ | $8.7928$ | $4.5 \times 10^{-4}$ | $0.303$ | $0.590$ | $0.513$ |
+| `20.00` | Scattering | Scattering | $18.9130$ | $18.9220$ | $4.8 \times 10^{-4}$ | $0.119$ | $0.236$ | $0.506$ |
+| `50.00` | Scattering | Scattering | $48.9683$ | $48.9923$ | $4.9 \times 10^{-4}$ | $0.043$ | $0.085$ | $0.502$ |
+
+Critical impact parameter: $b_c = 5.19525\,M$ (solver, by bisection) versus $5.19615\,M$ (exact), a relative difference of $1.7 \times 10^{-4}$.
+
+### Interpretation
+
+* The **capture threshold and the periastron radius** are reproduced closely: the regime is correct for every tested $b$, $b_c$ agrees to $1.7 \times 10^{-4}$, and $r_{\text{min}}$ agrees to about $5 \times 10^{-4}$ (up to $2.6 \times 10^{-3}$ very close to $b_c$).
+* The **deflection angle is about half of the general-relativistic value** (solver/exact ratio between $0.50$ and $0.54$). This is the known limitation of a Newtonian force law: it yields a deflection of $2M/b$ where general relativity gives $4M/b$. Gravitational lensing is therefore systematically underestimated, and the renders should be read as qualitatively, not quantitatively, correct.
 
 ### Reproducing the Benchmark
 
-To execute the automated validation suite:
+Build the project (see above), then run from the repository root:
 
 ```bash
-python benchmarks/validate_benchmark.py
+python benchmarks/validate_benchmark.py build
 ```
+
+The optional argument is the folder containing `test_ray` (or the path to the executable). Without it, the script looks in `build/`, `build/Release/`, `cmake-build-release/`, `cmake-build-debug/`, the repository root and the current directory. It exits with a non-zero code if the executable is not found or a run fails.
 
 ## License
 
