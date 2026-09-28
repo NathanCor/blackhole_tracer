@@ -132,6 +132,24 @@ constexpr double tiltAngle = -0.38; // Inclination angle
 
 ---
 
+## Validation & Benchmarks
+
+The numerical trajectory integration was validated against standard analytical solutions for null geodesics in Schwarzschild geometry ($b_c = 3\sqrt{3}M \approx 5.19615\,M$):
+
+| Impact Parameter $b/M$ | Analytical Regime | RK4 Numerical State | Theoretical $r_{\text{min}}$ | Numerical $r_{\text{min}}$ | Relative Error |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `4.50` | Plunge | Captured ($r \to 2M$) | $2.0000\,M$ | $2.0000\,M$ | Conforme |
+| `5.00` | Plunge | Captured ($r \to 2M$) | $2.0000\,M$ | $2.0000\,M$ | Conforme |
+| `5.15` | Critical Plunge | Captured ($r \to 2M$) | $2.0000\,M$ | $2.0000\,M$ | Conforme |
+| `5.20` | Critical Scattering | Deflected | $3.0687\,M$ | $3.2556\,M$ | $6.09 \times 10^{-2}$ |
+| `6.00` | Scattering | Deflected | $4.4534\,M$ | $4.5419\,M$ | $1.99 \times 10^{-2}$ |
+| `10.00` | Asymptotic Weak Field | Deflected | $8.7889\,M$ | $8.9597\,M$ | $1.94 \times 10^{-2}$ |
+
+Automated test execution:
+```bash
+python benchmarks/validate_benchmark.py
+```
+
 ## License
 
 This project is open-source under the MIT License.
