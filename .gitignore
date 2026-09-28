@@ -1,0 +1,9 @@
+# CLion / JetBrains
+.idea/
+cmake-build-*/
+build/
+
+# Fichiers intermédiaires
+*.ppm
+blackhole_tracer
+blackhole_tracer.exe
