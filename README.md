@@ -135,59 +135,6 @@ constexpr double tiltAngle = -0.38; // Inclination angle
 
 ---
 
-## Validation & Benchmarks
-
-### Theoretical Framework
-
-In Schwarzschild spacetime ($G = c = 1$, $M = 1$), the radial equation governing equatorial null geodesics ($\theta = \pi/2$) is parameterized by the impact parameter $b \equiv L/E$:
-
-$$\left(\frac{dr}{d\lambda}\right)^2 = \frac{1}{b^2} - V_{\text{eff}}(r) \quad \text{where} \quad V_{\text{eff}}(r) = \frac{1}{r^2}\left(1 - \frac{2M}{r}\right)$$
-
-* **Critical impact parameter**: The effective potential attains its maximum at the photon sphere $r_{\text{ph}} = 3M$, defining the capture threshold:
-  $$b_c = 3\sqrt{3}M \approx 5.196152\,M$$
-* **Plunge regime ($b < b_c$)**: Photons overcome the centrifugal barrier and cross the event horizon ($r \to 2M$).
-* **Scattering regime ($b > b_c$)**: Photons reach a turning point $r_{\text{min}}$ (periastron), the largest root of $1/b^2 - V_{\text{eff}}(r) = 0$, before escaping to infinity. The total deflection angle is
-  $$\hat{\alpha}(b) = 2\int_0^{u_0} \frac{du}{\sqrt{1/b^2 - u^2(1 - 2Mu)}} - \pi, \qquad u_0 = 1/r_{\text{min}}$$
-  which behaves as $4M/b$ at large $b$.
-
-### Methodology
-
-`benchmarks/validate_benchmark.py` compares the C++ RK4 solver (`test_ray`) with the exact analytical solution above, computed with `scipy.integrate.quad` and `scipy.optimize.brentq`. No output from a third-party ray-tracing code (such as GYOTO) is used: the reference is the analytical Schwarzschild result.
-
-Each ray is launched from $r = 2000\,M$ with unit velocity and impact parameter $b$. The launch radius matters: starting much closer (for example at $50\,M$) changes the ray's energy at infinity in the pseudo-Newtonian potential and inflates the apparent errors on $r_{\text{min}}$ and $b_c$ by one to two orders of magnitude.
-
-### Results
-
-| $b/M$ | Exact regime | Solver regime | Exact $r_{\text{min}}$ | Solver $r_{\text{min}}$ | Relative error | Solver deflection (rad) | Exact deflection (rad) | Solver / exact |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `4.50` | Plunge | Plunge | $2.0000$ | $2.0000$ | — | — | — | — |
-| `5.00` | Plunge | Plunge | $2.0000$ | $2.0000$ | — | — | — | — |
-| `5.15` | Plunge | Plunge | $2.0000$ | $2.0000$ | — | — | — | — |
-| `5.20` | Scattering | Scattering | $3.0687$ | $3.0766$ | $2.6 \times 10^{-3}$ | $3.703$ | $6.810$ | $0.544$ |
-| `5.35` | Scattering | Scattering | $3.5072$ | $3.5094$ | $6.4 \times 10^{-4}$ | $1.733$ | $3.183$ | $0.544$ |
-| `6.00` | Scattering | Scattering | $4.4534$ | $4.4554$ | $4.7 \times 10^{-4}$ | $0.912$ | $1.719$ | $0.531$ |
-| `8.00` | Scattering | Scattering | $6.7005$ | $6.7035$ | $4.5 \times 10^{-4}$ | $0.445$ | $0.859$ | $0.518$ |
-| `10.00` | Scattering | Scattering | $8.7889$ | $8.7928$ | $4.5 \times 10^{-4}$ | $0.303$ | $0.590$ | $0.513$ |
-| `20.00` | Scattering | Scattering | $18.9130$ | $18.9220$ | $4.8 \times 10^{-4}$ | $0.119$ | $0.236$ | $0.506$ |
-| `50.00` | Scattering | Scattering | $48.9683$ | $48.9923$ | $4.9 \times 10^{-4}$ | $0.043$ | $0.085$ | $0.502$ |
-
-Critical impact parameter: $b_c = 5.19525\,M$ (solver, by bisection) versus $5.19615\,M$ (exact), a relative difference of $1.7 \times 10^{-4}$.
-
-### Interpretation
-
-* The **capture threshold and the periastron radius** are reproduced closely: the regime is correct for every tested $b$, $b_c$ agrees to $1.7 \times 10^{-4}$, and $r_{\text{min}}$ agrees to about $5 \times 10^{-4}$ (up to $2.6 \times 10^{-3}$ very close to $b_c$).
-* The **deflection angle is about half of the general-relativistic value** (solver/exact ratio between $0.50$ and $0.54$). This is the known limitation of a Newtonian force law: it yields a deflection of $2M/b$ where general relativity gives $4M/b$. Gravitational lensing is therefore systematically underestimated, and the renders should be read as qualitatively, not quantitatively, correct.
-
-### Reproducing the Benchmark
-
-Build the project (see above), then run from the repository root:
-
-```bash
-python benchmarks/validate_benchmark.py build
-```
-
-The optional argument is the folder containing `test_ray` (or the path to the executable). Without it, the script looks in `build/`, `build/Release/`, `cmake-build-release/`, `cmake-build-debug/`, the repository root and the current directory. It exits with a non-zero code if the executable is not found or a run fails.
-
 ## License
 
 This project is open-source under the MIT License.
