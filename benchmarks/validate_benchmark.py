@@ -4,9 +4,12 @@ Validation physique des géodésiques nulles en métrique de Schwarzschild.
 Confrontation numérique (solveur RK4 C++) vs Solution analytique exacte (GYOTO benchmark standard).
 """
 
+import json
 import os
 import subprocess
-import json
+import sys
+from pathlib import Path
+
 import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import brentq
@@ -14,8 +17,10 @@ from scipy.optimize import brentq
 # Unités géométrisées G = c = 1, M = 1
 M = 1.0
 R_S = 2.0 * M
-R_PH = 3.0 * M
-B_CRIT = 3.0 * np.sqrt(3.0) * M  # ~ 5.196152423 M
+B_CRIT = 3.0 * np.sqrt(3.0) * M
+R_START = 2000.0
+TEST_B = [4.50, 5.00, 5.15, 5.20, 5.35, 6.00, 8.00, 10.00, 20.00, 50.00]
+
 
 def theoretical_r_min(b):
     """
@@ -23,95 +28,138 @@ def theoretical_r_min(b):
     1/b^2 - (1/r^2)*(1 - 2M/r) = 0 pour b > b_crit.
     """
     if b <= B_CRIT:
-        return R_S  # Plonge sous l'horizon
+        return R_S
 
     # Polynôme en u = 1/r : 2M*u^3 - u^2 + 1/b^2 = 0
     def eq(u):
-        return 2.0 * M * (u**3) - (u**2) + (1.0 / (b**2))
+        return 2.0 * M * u**3 - u**2 + 1.0 / b**2
 
-    u_root = brentq(eq, 0.0, 1.0 / (3.0 * M) - 1e-9)
-    return 1.0 / u_root
+    return 1.0 / brentq(eq, 0.0, 1.0 / (3.0 * M) - 1e-9)
+
+
+def theoretical_deflection(b):
+    if b <= B_CRIT:
+        return None
+
+    u0 = 1.0 / theoretical_r_min(b)
+
+    def integrand(t):
+        u = u0 * (1.0 - t * t)
+        return 4.0 * u0 * t / np.sqrt(1.0 / b**2 - u**2 * (1.0 - 2.0 * M * u))
+
+    value, _ = quad(integrand, 0.0, 1.0, limit=400)
+    return value - np.pi
+
 
 def find_executable():
-    """Détecte l'exécutable sous Windows (chemins standards CLion)."""
-    candidates = [
-        os.path.join("cmake-build-debug", "test_ray.exe"),
-        os.path.join("cmake-build-release", "test_ray.exe"),
-        os.path.join("build", "test_ray.exe"),
-        os.path.join("build", "Release", "test_ray.exe"),
-        "test_ray.exe"
+    root = Path(__file__).resolve().parent.parent
+    names = ["test_ray", "test_ray.exe"]
+    folders = [
+        Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None,
+        root / "build",
+        root / "build" / "Release",
+        root / "cmake-build-release",
+        root / "cmake-build-debug",
+        root,
+        Path.cwd(),
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            return os.path.abspath(path)
+    for folder in folders:
+        if folder is None:
+            continue
+        if folder.is_file():
+            return str(folder)
+        for name in names:
+            candidate = folder / name
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
     return None
+
+
+def run_ray(exe, b):
+    res = subprocess.run(
+        [exe, f"{b:.6f}", f"{R_START}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(res.stdout.strip().splitlines()[-1])
+
+
+def numerical_critical_b(exe):
+    lo, hi = 4.0, 6.0
+    for _ in range(40):
+        mid = 0.5 * (lo + hi)
+        if run_ray(exe, mid)["captured"]:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def fmt(value, spec):
+    return "--" if value is None else format(value, spec)
+
 
 def main():
     exe = find_executable()
-    print("=" * 72)
-    print(" SCHWARZSCHILD NULL GEODESICS PHYSICAL VALIDATION SUITE")
-    print(f" Critical Impact Parameter: b_c = 3*sqrt(3)*M = {B_CRIT:.6f} M")
-    if exe:
-        print(f" Target Executable: {exe}")
-    else:
-        print(" [!] Executable test_ray.exe not found.")
-    print("=" * 72)
+    if exe is None:
+        print("test_ray executable not found. Build the project and pass its path or folder as argument.", file=sys.stderr)
+        return 2
 
-    # Ajout du chemin des DLL MinGW de CLion au PATH d'exécution
-    env = os.environ.copy()
-    mingw_bin = r"C:\Users\natha\AppData\Local\Programs\CLion\bin\mingw\bin"
-    if os.path.exists(mingw_bin):
-        env["PATH"] = mingw_bin + os.pathsep + env.get("PATH", "")
+    print("=" * 108)
+    print("Schwarzschild null geodesics: pseudo-Newtonian RK4 solver vs exact GR solution")
+    print(f"Executable: {exe}")
+    print(f"Start radius: {R_START:g} M")
+    print("=" * 108)
+    header = (
+        f"{'b/M':>6} | {'regime exact':<12} | {'regime code':<11} | {'r_min exact':>11} | "
+        f"{'r_min code':>10} | {'rel. err':>9} | {'defl. code':>10} | {'defl. GR':>9} | {'code/GR':>7}"
+    )
+    print(header)
+    print("-" * len(header))
 
-    test_b = [4.50, 5.00, 5.15, 5.20, 5.35, 6.00, 8.00, 10.00]
+    failures = 0
+    ratios = []
 
-    print(f"{'b / M':<8} | {'Régime':<12} | {'r_min Exact':<14} | {'r_min RK4 (C++)':<16} | {'Écart relatif'}")
-    print("-" * 72)
+    for b in TEST_B:
+        try:
+            data = run_ray(exe, b)
+        except (subprocess.CalledProcessError, json.JSONDecodeError, IndexError) as exc:
+            print(f"{b:>6.2f} | execution failed: {type(exc).__name__}")
+            failures += 1
+            continue
 
-    for b in test_b:
+        exact_capture = b <= B_CRIT
         r_exact = theoretical_r_min(b)
-        regime = "Capture" if b < B_CRIT else "Diffusion"
+        d_exact = theoretical_deflection(b)
+        d_code = data["deflection"]
+        rel_err = abs(data["r_min"] - r_exact) / r_exact
+        ratio = None if (d_code is None or d_exact is None) else d_code / d_exact
+        if ratio is not None and b >= 10.0:
+            ratios.append(ratio)
 
-        if exe:
-            try:
-                res = subprocess.run(
-                    [exe, f"{b:.4f}", "50.0"],
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                    shell=False
-                )
+        print(
+            f"{b:>6.2f} | {'capture' if exact_capture else 'scattering':<12} | "
+            f"{'capture' if data['captured'] else 'scattering':<11} | {r_exact:>11.4f} | "
+            f"{data['r_min']:>10.4f} | {rel_err:>9.2e} | {fmt(d_code, '10.5f'):>10} | "
+            f"{fmt(d_exact, '9.5f'):>9} | {fmt(ratio, '7.3f'):>7}"
+        )
 
-                if res.returncode != 0:
-                    num_str = f"Code err {res.returncode}"
-                    err_str = "Crash C++"
-                else:
-                    output = res.stdout.strip()
-                    json_line = output.splitlines()[-1] if output else ""
-                    data = json.loads(json_line)
+    try:
+        b_code = numerical_critical_b(exe)
+    except (subprocess.CalledProcessError, json.JSONDecodeError, IndexError) as exc:
+        print(f"critical impact parameter search failed: {type(exc).__name__}", file=sys.stderr)
+        return 1
 
-                    r_num = data["r_min"]
-                    is_captured = data["captured"]
+    print()
+    print(f"Critical impact parameter, solver : {b_code:.6f} M")
+    print(f"Critical impact parameter, exact  : {B_CRIT:.6f} M")
+    print(f"Relative difference               : {abs(b_code - B_CRIT) / B_CRIT:.2e}")
+    if ratios:
+        print(f"Mean deflection ratio solver/GR (b >= 10 M) : {np.mean(ratios):.3f}")
 
-                    if regime == "Capture":
-                        num_str = f"{r_num:.4f} M"
-                        err_str = "Conforme (Horizon)" if is_captured else "Faux positif"
-                    else:
-                        rel_err = abs(r_num - r_exact) / r_exact
-                        num_str = f"{r_num:.4f} M"
-                        err_str = f"{rel_err:.2e}"
+    return 1 if failures else 0
 
-            except Exception as e:
-                num_str = "Erreur"
-                err_str = f"{type(e).__name__}"
-        else:
-            num_str = "--"
-            err_str = "--"
-
-        exact_str = "2.0000 M (r_s)" if regime == "Capture" else f"{r_exact:.4f} M"
-        print(f"{b:<8.2f} | {regime:<12} | {exact_str:<14} | {num_str:<16} | {err_str}")
-
-    print("\n[OK] Validation physique conforme aux spécifications standard (Vincent et al., 2011).")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
