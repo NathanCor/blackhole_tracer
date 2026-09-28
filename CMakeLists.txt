@@ -29,3 +29,6 @@ if(FFMPEG_EXECUTABLE)
             DEPENDS blackhole_tracer
     )
 endif()
+
+add_executable(test_ray benchmarks/test_ray.cpp src/Geodesic.cpp)
+target_include_directories(test_ray PRIVATE include)
