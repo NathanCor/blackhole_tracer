@@ -56,7 +56,6 @@ $$I_{\text{obs}} \propto g^4 I_{\text{em}}$$
 ```text
 .
 ├── CMakeLists.txt
-├── Makefile
 ├── include/
 │   ├── AccretionDisk.hpp
 │   ├── Dither.hpp
